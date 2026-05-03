@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Моя таблица</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+        }
+        .setup {
+            background: #fff9e6;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 5px solid #ffc107;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        #result {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            min-height: 150px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        tr:hover {
+            background: #f5f5f5;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #d63384;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Моя Google Таблица</h1>
+        
+        <div class="setup">
+            <h3>⚙️ Настройка подключения:</h3>
+            
+            <label><strong>1. Client ID:</strong></label>
+            <input type="text" id="clientId" placeholder="Вставьте Client ID из Google Cloud Console">
+            
+            <label><strong>2. ID таблицы:</strong></label>
+            <input type="text" id="spreadsheetId" placeholder="Вставьте ID вашей Google Таблицы">
+            
+            <div class="info">
+                <p><strong>📌 Как найти ID таблицы:</strong></p>
+                <p>Откройте вашу Google Таблицу и посмотрите на URL:</p>
+                <code>https://docs.google.com/spreadsheets/d/<span style="background: yellow;">1ABC123xyz456</span>/edit</code>
+                <p>Скопируйте часть между <code>/d/</code> и <code>/edit</code></p>
+            </div>
+        </div>
+
+        <div style="text-align: center;">
+            <button onclick="authorize()">🔐 Войти через Google</button>
+            <button onclick="loadData()">📥 Загрузить данные</button>
+            <button onclick="addRow()">➕ Добавить строку</button>
+            <button onclick="signOut()">🚪 Выйти</button>
+        </div>
+
+        <div id="result">
+            <p style="text-align: center; color: #666;">
+                👆 Введите настройки выше и нажмите "Войти через Google"
+            </p>
+        </div>
+    </div>
+
+    <!-- Подключение Google API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/api.js"></script>
+    
+    <script>
+        const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+        const DISCOVERY_DOC = 'https://sheets.googleapis.com/$discovery/rest?version=v4';
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+
+        // Загрузка API
+        window.onload = function() {
+            gapi.load('client', async () => {
+                await gapi.client.init({
+                    discoveryDocs: [DISCOVERY_DOC],
+                });
+                gapiInited = true;
+            });
+        };
+
+        // Авторизация
+        function authorize() {
+            const clientId = document.getElementById('clientId').value.trim();
+            
+            if (!clientId) {
+                alert('❌ Введите Client ID!');
+                return;
+            }
+
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: SCOPES,
+                callback: (response) => {
+                    if (response.error) {
+                        document.getElementById('result').innerHTML = 
+                            `<p style="color: red;">❌ Ошибка: ${response.error}</p>`;
+                        return;
+                    }
+                    document.getElementById('result').innerHTML = 
+                        '<p style="color: green;">✅ Вход выполнен успешно!</p>';
+                },
+            });
+
+            tokenClient.requestAccessToken({prompt: 'consent'});
+        }
+
+        // Загрузка данных
+        async function loadData() {
+            const spreadsheetId = document.getElementById('spreadsheetId').value.trim();
+            
+            if (!spreadsheetId) {
+                alert('❌ Введите ID таблицы!');
+                return;
+            }
+
+            if (!gapi.client.getToken()) {
+                alert('❌ Сначала войдите через Google!');
+                return;
+            }
+
+            try {
+                const response = await gapi.client.sheets.spreadsheets.values.get({
+                    spreadsheetId: spreadsheetId,
+                    range: 'A1:Z100', // Читаем все данные
+                });
+
+                const values = response.result.values;
+
+                if (!values || values.length === 0) {
+                    document.getElementById('result').innerHTML = 
+                        '<p>📭 Таблица пуста</p>';
+                    return;
+                }
+
+                // Создаем таблицу
+                let html = '<table><thead><tr>';
+                
+                // Заголовки
+                values[0].forEach(header => {
+                    html += `<th>${header}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+
+                // Данные
+                for (let i = 1; i < values.length; i++) {
+                    html += '<tr>';
+                    values[i].forEach(cell => {
+                        html += `<td>${cell || ''}</td>`;
+                    });
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table>';
+                document.getElementById('result').innerHTML = html;
+
+            } catch (error) {
+                document.getElementById('result').innerHTML = 
+                    `<p style="color: red;">❌ Ошибка: ${error.message}</p>`;
+            }
+        }
+
+        // Добавление строки
+        async function addRow() {
+            const spreadsheetId = document.getElementById('spreadsheetId').value.trim();
+            
+            if (!spreadsheetId) {
+                alert('❌ Введите ID таблицы!');
+                return;
+            }
+
+            const name = prompt('Введите имя:');
+            const inn = prompt('Введите ИНН:');
+            
+            if (!name || !inn) return;
+
+            try {
+                await gapi.client.sheets.spreadsheets.values.append({
+                    spreadsheetId: spreadsheetId,
+                    range: 'A:B',
+                    valueInputOption: 'RAW',
+                    resource: {
+                        values: [[name, inn]]
+                    }
+                });
+
+                alert('✅ Строка добавлена!');
+                loadData(); // Обновляем таблицу
+
+            } catch (error) {
+                alert(`❌ Ошибка: ${error.message}`);
+            }
+        }
+
+        // Выход
+        function signOut() {
+            const token = gapi.client.getToken();
+            if (token) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+                document.getElementById('result').innerHTML = 
+                    '<p>👋 Вы вышли из аккаунта</p>';
+            }
+        }
+    </script>
+</body>
+</html>
